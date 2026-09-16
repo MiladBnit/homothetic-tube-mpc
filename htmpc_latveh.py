@@ -13,9 +13,10 @@ Section 2 adds what the interactive demo needs on top of it:
   * ``simulate()``         - the same closed loop, additionally recording the
                              predicted nominal trajectory z_{j|k} and the closed-form
                              scale sequence alpha_{j|k} at every step
-  * ``animate_road()``     - Plotly road-view animation: chase camera, vehicles to
-                             scale, tube patch, prediction ahead (play / pause / scrub)
-  * ``animate_track()``    - whole-track view of the same closed loops (fixed camera)
+  * ``animate_overlay()``  - Plotly animation of the paper figure: one fixed panel, both
+                             trajectories and tube bands growing in time (default)
+  * ``animate_track()``    - fixed camera, separate panels + predictions + alpha_k
+  * ``animate_road()``     - chase camera, vehicles drawn to scale
   * ``plot_static()``      - matplotlib summary figure
   * ``run()``              - one-call convenience wrapper
 
@@ -1113,7 +1114,144 @@ def animate_road(d: Design, tr_p: Trace, tr_r: Trace, y_ref_sig, title=None,
     return fig
 
 
-animate = animate_road      # default view
+# ── Plotly overlay animation (single fixed panel, the paper figure growing in time) ──
+
+def animate_overlay(d: Design, tr_p: Trace, tr_r: Trace, y_ref_sig, title=None,
+                    frame_ms: int = 100, height: int = 520):
+    """
+    One fixed panel, identical in content to the paper's lane-change figure, animated:
+    at frame k the HT-MPC (green) and RT-MPC (orange) trajectories e_y(x) and their
+    tube bands z_k +/- alpha_k*s (HT) and z_k +/- s (RT) are drawn up to step k.
+    """
+    import plotly.graph_objects as go
+
+    Ts, vx0, s, W = d.Ts, d.vx0, d.s_ey, d.lane_width
+    T_full = len(y_ref_sig)
+    T_max  = max(len(tr_p.x), len(tr_r.x))
+    ds     = Ts*vx0
+    x_end  = (T_full - 1)*ds
+    s_ref  = np.arange(T_full)*ds
+
+    fig = go.Figure()
+
+    # static: lane boundaries, |e_y| constraint, centre line, reference
+    for yv, wdt, dash in ((W, 1.5, "solid"), (-W, 1.5, "solid"),
+                          (d.x_bounds[0], 0.8, "dash"), (-d.x_bounds[0], 0.8, "dash"),
+                          (0., 0.6, "dot")):
+        fig.add_shape(type="line", x0=0, x1=x_end, y0=yv, y1=yv,
+                      line=dict(color=_HEX["constr"], width=wdt, dash=dash), opacity=0.7)
+    fig.add_trace(go.Scatter(x=s_ref, y=y_ref_sig, mode="lines", line_shape="hv",
+                             line=dict(color=_HEX["ref"], width=1), name="Reference",
+                             hoverinfo="skip"))
+
+    # animated traces (order = frame trace indices)
+    anim_idx = {}
+
+    def _add(key, trace):
+        anim_idx[key] = len(fig.data)
+        fig.add_trace(trace)
+
+    # RT first so the (usually thinner) HT band draws on top, as in the paper
+    for key, band_alpha, band_lbl in (("r", 0.15, "Ω (RT-MPC)"), ("p", 0.30, "α<sub>k</sub>Ω (HT-MPC)")):
+        col, lbl = _HEX[key], LABELS[key]
+        _add(f"{key}_band", go.Scatter(x=[], y=[], mode="lines", fill="toself",
+                                       fillcolor=_rgba(col, band_alpha), line=dict(width=0),
+                                       name=band_lbl, hoverinfo="skip"))
+    for key in ("r", "p"):
+        col, lbl = _HEX[key], LABELS[key]
+        _add(f"{key}_path", go.Scatter(x=[], y=[], mode="lines",
+                                       line=dict(color=col, width=1.6, dash="dash"),
+                                       name=lbl))
+        _add(f"{key}_head", go.Scatter(x=[], y=[], mode="markers",
+                                       marker=dict(color=col, size=9,
+                                                   line=dict(color="black", width=0.8)),
+                                       showlegend=False, hoverinfo="skip"))
+        _add(f"{key}_viol", go.Scatter(x=[], y=[], mode="markers",
+                                       marker=dict(symbol="x", size=10, color=col,
+                                                   line=dict(width=2)),
+                                       showlegend=False, hoverinfo="skip"))
+
+    def _frame(k):
+        data, idx = [], []
+        for key, tr in (("r", tr_r), ("p", tr_p)):
+            kk = min(k, len(tr.x) - 1)
+            sx = np.arange(kk + 1)*ds
+            a  = np.clip(tr.alpha[:kk + 1], 0., 1.) if key == "p" else np.ones(kk + 1)
+            lo = tr.z[:kk + 1, 0] - a*s;  hi = tr.z[:kk + 1, 0] + a*s
+            data.append(go.Scatter(x=np.concatenate([sx, sx[::-1]]),
+                                   y=np.concatenate([hi, lo[::-1]])))
+            idx.append(anim_idx[f"{key}_band"])
+        for key, tr in (("r", tr_r), ("p", tr_p)):
+            kk = min(k, len(tr.x) - 1)
+            sx = np.arange(kk + 1)*ds
+            vi = np.where(tr.viol_x[:kk + 1])[0]
+            data += [go.Scatter(x=sx, y=tr.x[:kk + 1, 0]),
+                     go.Scatter(x=[sx[-1]], y=[tr.x[kk, 0]]),
+                     go.Scatter(x=sx[vi], y=tr.x[vi, 0])]
+            idx += [anim_idx[f"{key}_path"], anim_idx[f"{key}_head"], anim_idx[f"{key}_viol"]]
+        return data, idx
+
+    def _title(k):
+        kp = min(k, len(tr_p.x) - 1)
+        parts = [f"k = {k:3d}   t = {k*Ts:4.1f} s   x = {k*ds:6.1f} m",
+                 f"HT-MPC α<sub>k</sub> = {min(tr_p.alpha[kp], 1.):.3f}"]
+        if not tr_p.ok and k >= len(tr_p.x):
+            parts.append(f"<b style='color:{_HEX['p']}'>HT-MPC infeasible at k = {len(tr_p.x)}</b>")
+        if not tr_r.ok and k >= len(tr_r.x):
+            parts.append(f"<b style='color:{_HEX['r']}'>RT-MPC infeasible at k = {len(tr_r.x)}</b>")
+        if title:
+            parts.insert(0, title)
+        return "   |   ".join(parts)
+
+    frames = []
+    for k in range(T_max):
+        data, idx = _frame(k)
+        frames.append(go.Frame(data=data, traces=idx, name=str(k),
+                               layout=go.Layout(title_text=_title(k))))
+    fig.frames = frames
+    d0, i0 = _frame(0)
+    for tr_, i_ in zip(d0, i0):
+        fig.data[i_].x = tr_.x;  fig.data[i_].y = tr_.y
+
+    lab_every = 5 if T_max <= 80 else 10
+    steps = [dict(method="animate", label=(f"{k*Ts:.1f}" if k % lab_every == 0 else ""),
+                  args=[[str(k)], dict(mode="immediate", frame=dict(duration=0, redraw=False),
+                                       transition=dict(duration=0))])
+             for k in range(T_max)]
+    fig.update_layout(
+        height=height, template="plotly_white",
+        title=dict(text=_title(0), x=0.01, xanchor="left", yref="paper", y=1.0,
+                   yanchor="bottom", pad=dict(b=10), font=dict(size=12)),
+        legend=dict(orientation="h", y=-0.40, yanchor="top", x=0, font=dict(size=10)),
+        margin=dict(l=60, r=20, t=70, b=130),
+        xaxis=dict(title="Longitudinal distance [m]", range=[0, x_end]),
+        yaxis=dict(title="e<sub>y</sub> [m]", range=[-W - 0.4, W + 0.4], fixedrange=True),
+        updatemenus=[dict(type="buttons", showactive=False, x=1.0, xanchor="right",
+                          y=1.0, yanchor="bottom", pad=dict(b=4), direction="left",
+                          buttons=[
+                              dict(label="▶ Play", method="animate",
+                                   args=[None, dict(frame=dict(duration=frame_ms, redraw=False),
+                                                    fromcurrent=True, transition=dict(duration=0))]),
+                              dict(label="❚❚ Pause", method="animate",
+                                   args=[[None], dict(mode="immediate",
+                                                      frame=dict(duration=0, redraw=False),
+                                                      transition=dict(duration=0))]),
+                          ])],
+        sliders=[dict(active=0, steps=steps, x=0.0, len=1.0, y=-0.12, yanchor="top",
+                      pad=dict(t=0, b=0), ticklen=3, minorticklen=0, font=dict(size=9),
+                      currentvalue=dict(prefix="t = ", suffix=" s", visible=True,
+                                        xanchor="left", font=dict(size=11)))],
+    )
+    fig.add_annotation(x=0.005, y=-W + 0.15, xref="x domain", yref="y", text="slow lane",
+                       showarrow=False, xanchor="left", yanchor="bottom",
+                       font=dict(size=10, color=_HEX["constr"]))
+    fig.add_annotation(x=0.005, y=W - 0.15, xref="x domain", yref="y", text="fast lane",
+                       showarrow=False, xanchor="left", yanchor="top",
+                       font=dict(size=10, color=_HEX["constr"]))
+    return fig
+
+
+animate = animate_overlay   # default view
 
 
 # ── Static matplotlib summary figure ─────────────────────────────────────────

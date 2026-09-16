@@ -25,7 +25,7 @@ vehicle, current tube cross-section, and the prediction the MPC is making at tha
 | `LatVeh_Benchmark.ipynb` | **Paper figure** — lateral vehicle dynamics, lane change (`fig_lane_change_comparison_alt.png`) |
 | `CSTR_Benchmark.ipynb` | **Paper figure** — continuous stirred-tank reactor (`fig_cstr.png`) |
 | `htmpc_latveh.py` | Engine for the interactive demos. Section 1 is a **verbatim copy** of the benchmark's model / uncertainty / RPI / tightening / OCP code; Section 2 adds manoeuvre generators, prediction recording and the animation |
-| `LatVeh_Interactive.ipynb` | Interactive notebook (Jupyter / Colab): sliders + animated road view (chase camera, vehicles to scale) |
+| `LatVeh_Interactive.ipynb` | Interactive notebook (Jupyter / Colab): sliders + the paper figure animated in time |
 | `app.py` | Streamlit web app: same engine, sidebar controls, live animation |
 | `requirements.txt` | Open-source dependencies (no commercial solver needed) |
 
