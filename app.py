@@ -55,6 +55,8 @@ with st.sidebar:
     noise_seed = c2.number_input("noise seed (w_k)", 0, 9999, 7, step=1)
     speed = st.select_slider("playback speed", [0.5, 1.0, 2.0, 4.0], 1.0,
                              format_func=lambda v: f"{v:g}x")
+    view = st.radio("view", ["road view (chase camera)", "whole track"], index=0,
+                    horizontal=True)
     show_static = st.checkbox("show static summary figure", False)
     st.divider()
     st.caption(
@@ -96,8 +98,9 @@ cols[5].metric("constraint violations", f"{sp['state_violations']} / {sr['state_
 st.caption(f"True plant: Δv_x = {dv:+.4f} m/s ({dv*3.6:+.3f} km/h)")
 
 # ── Animation ─────────────────────────────────────────────────────────────────
-fig = H.animate(d, tr_p, tr_r, y_ref, title=f"{mode}, ramp {ramp:.1f} s",
-                frame_ms=int(round(1000*d.Ts/speed)), height=780)
+anim = H.animate_road if view.startswith("road") else H.animate_track
+fig = anim(d, tr_p, tr_r, y_ref, title=f"{mode}, ramp {ramp:.1f} s",
+           frame_ms=int(round(1000*d.Ts/speed)), height=760)
 st.plotly_chart(fig, theme=None, config={"displaylogo": False}, **_FULL)
 
 if show_static:
@@ -106,11 +109,12 @@ if show_static:
 with st.expander("What am I looking at?"):
     st.markdown(
         """
-* **Top / middle panel** - lateral deviation $e_y$ against distance travelled. Solid line: true
-  trajectory so far; triangle: the vehicle (rotated by its heading error $e_\\psi$); thick bar:
-  the *current* tube cross-section ($\\alpha_k\\Omega$ for HT-MPC, $\\Omega$ for RT-MPC); dotted
-  line + shaded band ahead: the nominal trajectory $z_{j|k}$ the OCP has just optimised and the
-  tube $\\alpha_{j|k}\\Omega$ it tightens the constraints with.
+* **Top / middle panel** - each road strip follows its own vehicle (drawn to scale and rotated
+  by its heading error $e_\\psi$). The shaded patch around the car is the *current* tube
+  cross-section ($\\alpha_k\\Omega$ for HT-MPC, $\\Omega$ for RT-MPC); the dotted line and band
+  ahead are the nominal trajectory $z_{j|k}$ the OCP has just optimised and the tube
+  $\\alpha_{j|k}\\Omega$ it tightens the constraints with. *Whole track* shows the same run with
+  a fixed camera.
 * **Bottom panel** - the tube scale $\\alpha_k$. HT-MPC measures it from the actual error
   $e_k = x_k - z_k$; RT-MPC assumes the worst case $\\alpha_k = 1$ at every step.
 * Because only the first predicted input is applied and its constraint is tightened by

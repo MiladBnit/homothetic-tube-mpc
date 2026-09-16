@@ -13,7 +13,9 @@ Section 2 adds what the interactive demo needs on top of it:
   * ``simulate()``         - the same closed loop, additionally recording the
                              predicted nominal trajectory z_{j|k} and the closed-form
                              scale sequence alpha_{j|k} at every step
-  * ``animate()``          - Plotly animation (play / pause / scrub)
+  * ``animate_road()``     - Plotly road-view animation: chase camera, vehicles to
+                             scale, tube patch, prediction ahead (play / pause / scrub)
+  * ``animate_track()``    - whole-track view of the same closed loops (fixed camera)
   * ``plot_static()``      - matplotlib summary figure
   * ``run()``              - one-call convenience wrapper
 
@@ -720,10 +722,10 @@ def _rgba(hexcol, a):
     return f"rgba({int(h[0:2],16)},{int(h[2:4],16)},{int(h[4:6],16)},{a})"
 
 
-def animate(d: Design, tr_p: Trace, tr_r: Trace, y_ref_sig, title=None,
-            frame_ms: int = 100, height: int = 820):
+def animate_track(d: Design, tr_p: Trace, tr_r: Trace, y_ref_sig, title=None,
+                  frame_ms: int = 100, height: int = 820):
     """
-    Plotly animation of both closed loops.
+    Whole-track Plotly animation of both closed loops (fixed camera).
       row 1: HT-MPC  - past path, vehicle, current tube alpha_k*Omega, predicted
                        nominal trajectory z_{j|k} with the tube alpha_{j|k}*Omega
       row 2: RT-MPC  - same with the fixed tube Omega
@@ -896,6 +898,222 @@ def animate(d: Design, tr_p: Trace, tr_r: Trace, y_ref_sig, title=None,
     if title:
         fig.layout.annotations[0].text = f"HT-MPC (homothetic tube, proposed) — {title}"
     return fig
+
+
+# ── Plotly road-view animation (chase camera, vehicles drawn to scale) ───────
+
+_CAR_L, _CAR_W = 4.5, 1.8          # vehicle footprint [m]
+
+
+def _car_polygon(x, y, psi, L=_CAR_L, W=_CAR_W, front_only=False):
+    """Closed polygon of a rectangle centred at (x, y), rotated by psi [rad]."""
+    if front_only:
+        pts = np.array([[L/2 - 1.0, -W/2], [L/2, -W/2], [L/2, W/2], [L/2 - 1.0, W/2]])
+    else:
+        pts = np.array([[-L/2, -W/2], [L/2, -W/2], [L/2, W/2], [-L/2, W/2]])
+    c, s = np.cos(psi), np.sin(psi)
+    R = np.array([[c, -s], [s, c]])
+    p = pts@R.T + np.array([x, y])
+    p = np.vstack([p, p[:1]])
+    return p[:, 0], p[:, 1]
+
+
+def animate_road(d: Design, tr_p: Trace, tr_r: Trace, y_ref_sig, title=None,
+                 frame_ms: int = 100, height: int = 720, window: float = 60.0):
+    """
+    Road view: two road strips (HT-MPC on top, RT-MPC below), a chase camera that follows
+    each vehicle, the vehicle drawn to scale and rotated by its heading error, the current
+    tube cross-section alpha_k*Omega as a shaded patch around the nominal position, the
+    predicted nominal path z_{j|k} with its tube ahead, and alpha_k in a third panel.
+    """
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+
+    Ts, vx0, N, s, W = d.Ts, d.vx0, d.N, d.s_ey, d.lane_width
+    T_full = len(y_ref_sig)
+    T_max  = max(len(tr_p.x), len(tr_r.x))
+    ds     = Ts*vx0
+    x_end  = (T_full - 1 + N)*ds + window
+    s_ref  = np.arange(T_full + N)*ds
+    y_ref_ext = np.concatenate([y_ref_sig, np.full(N, y_ref_sig[-1])])
+    back, ahead = 0.2*window, 0.8*window
+
+    fig = make_subplots(rows=3, cols=1, row_heights=[0.36, 0.36, 0.28],
+                        vertical_spacing=0.10, shared_xaxes=False,
+                        subplot_titles=("HT-MPC (homothetic tube, proposed)",
+                                        "RT-MPC (fixed tube)",
+                                        "tube scale α<sub>k</sub> along the track"))
+
+    # ── static road furniture ────────────────────────────────────────────────
+    for row in (1, 2):
+        fig.add_shape(type="rect", x0=-back, x1=x_end, y0=-W, y1=W, row=row, col=1,
+                      fillcolor="#e9e9e9", line=dict(width=0), layer="below")
+        for yv, wdt, dash, col in ((W, 2.0, "solid", "#444"), (-W, 2.0, "solid", "#444"),
+                                   (0., 1.2, "dash", "white"),
+                                   (d.x_bounds[0], 0.8, "dot", _HEX["constr"]),
+                                   (-d.x_bounds[0], 0.8, "dot", _HEX["constr"])):
+            fig.add_shape(type="line", x0=-back, x1=x_end, y0=yv, y1=yv, row=row, col=1,
+                          line=dict(color=col, width=wdt, dash=dash), layer="below")
+        fig.add_trace(go.Scatter(x=s_ref, y=y_ref_ext, mode="lines", line_shape="hv",
+                                 line=dict(color=_HEX["ref"], width=1), name="reference",
+                                 showlegend=(row == 1), hoverinfo="skip"), row=row, col=1)
+        fig.add_annotation(x=0.01, y=-W + 0.15, xref=f"x{'' if row == 1 else row} domain",
+                           yref=f"y{'' if row == 1 else row}", text="slow lane",
+                           showarrow=False, xanchor="left", yanchor="bottom",
+                           font=dict(size=10, color="#555"))
+        fig.add_annotation(x=0.01, y=W - 0.15, xref=f"x{'' if row == 1 else row} domain",
+                           yref=f"y{'' if row == 1 else row}", text="fast lane",
+                           showarrow=False, xanchor="left", yanchor="top",
+                           font=dict(size=10, color="#555"))
+    fig.add_shape(type="line", x0=0, x1=(T_full - 1)*ds, y0=1, y1=1, row=3, col=1,
+                  line=dict(color="grey", width=0.6, dash="dot"))
+
+    # ── animated traces (order matters, frames refer to these indices) ───────
+    anim_idx = {}
+
+    def _add(key, trace, row):
+        anim_idx[key] = len(fig.data)
+        fig.add_trace(trace, row=row, col=1)
+
+    for key, row in (("p", 1), ("r", 2)):
+        col, lbl = _HEX[key], LABELS[key]
+        _add(f"{key}_band", go.Scatter(x=[], y=[], mode="lines", fill="toself",
+                                       fillcolor=_rgba(col, 0.18), line=dict(width=0),
+                                       name=f"{lbl}: predicted tube " +
+                                            ("α<sub>j|k</sub>Ω" if key == "p" else "Ω"),
+                                       hoverinfo="skip"), row)
+        _add(f"{key}_pred", go.Scatter(x=[], y=[], mode="lines",
+                                       line=dict(color=col, width=1.2, dash="dot"),
+                                       name=f"{lbl}: predicted nominal z<sub>j|k</sub>",
+                                       hoverinfo="skip"), row)
+        _add(f"{key}_past", go.Scatter(x=[], y=[], mode="lines",
+                                       line=dict(color=col, width=1.5),
+                                       name=f"{lbl}: driven path", hoverinfo="skip"), row)
+        _add(f"{key}_tube", go.Scatter(x=[], y=[], mode="lines", fill="toself",
+                                       fillcolor=_rgba(col, 0.35), line=dict(width=0),
+                                       name=f"{lbl}: current tube " +
+                                            ("α<sub>k</sub>Ω" if key == "p" else "Ω"),
+                                       hoverinfo="skip"), row)
+        _add(f"{key}_car", go.Scatter(x=[], y=[], mode="lines", fill="toself",
+                                      fillcolor=col, line=dict(color="black", width=1),
+                                      name=f"{lbl}: vehicle", hoverinfo="skip"), row)
+        _add(f"{key}_nose", go.Scatter(x=[], y=[], mode="lines", fill="toself",
+                                       fillcolor="rgba(255,255,255,0.75)", line=dict(width=0),
+                                       showlegend=False, hoverinfo="skip"), row)
+        _add(f"{key}_viol", go.Scatter(x=[], y=[], mode="markers",
+                                       marker=dict(symbol="x", size=10, color="red",
+                                                   line=dict(width=2)),
+                                       name=f"{lbl}: constraint violation",
+                                       showlegend=False, hoverinfo="skip"), row)
+    _add("p_alpha", go.Scatter(x=[], y=[], mode="lines", line=dict(color=_HEX["p"], width=2),
+                               name="α<sub>k</sub> HT-MPC"), 3)
+    _add("r_alpha", go.Scatter(x=[], y=[], mode="lines",
+                               line=dict(color=_HEX["r"], width=2, dash="dash"),
+                               name="α<sub>k</sub> RT-MPC (= 1)"), 3)
+    _add("cursor", go.Scatter(x=[], y=[], mode="lines", line=dict(color="grey", width=1),
+                              showlegend=False, hoverinfo="skip"), 3)
+
+    # ── frames ───────────────────────────────────────────────────────────────
+    def _frame(k):
+        data, idx, ranges = [], [], {}
+        for key, tr, ax in (("p", tr_p, "xaxis"), ("r", tr_r, "xaxis2")):
+            kk = min(k, len(tr.x) - 1)
+            xk = kk*ds
+            sx = np.arange(kk + 1)*ds
+            sh = xk + np.arange(N + 1)*ds
+            zp = tr.z_pred[kk, :, 0]
+            ap = tr.a_pred[kk] if key == "p" else np.ones(N + 1)
+            a_now = min(tr.alpha[kk], 1.) if key == "p" else 1.
+            zk = tr.z[kk, 0]
+            ey, psi = tr.x[kk, 0], tr.x[kk, 1]
+            vi = np.where(tr.viol_x[:kk + 1])[0]
+            cx, cy = _car_polygon(xk, ey, psi)
+            nx, ny = _car_polygon(xk, ey, psi, front_only=True)
+            tube_x = [xk - _CAR_L/2, xk + _CAR_L/2, xk + _CAR_L/2, xk - _CAR_L/2, xk - _CAR_L/2]
+            tube_y = [zk - a_now*s, zk - a_now*s, zk + a_now*s, zk + a_now*s, zk - a_now*s]
+            data += [
+                go.Scatter(x=np.concatenate([sh, sh[::-1]]),
+                           y=np.concatenate([zp + ap*s, (zp - ap*s)[::-1]])),
+                go.Scatter(x=sh, y=zp),
+                go.Scatter(x=sx, y=tr.x[:kk + 1, 0]),
+                go.Scatter(x=tube_x, y=tube_y),
+                go.Scatter(x=cx, y=cy),
+                go.Scatter(x=nx, y=ny),
+                go.Scatter(x=sx[vi], y=tr.x[vi, 0]),
+            ]
+            idx += [anim_idx[f"{key}_{nm}"]
+                    for nm in ("band", "pred", "past", "tube", "car", "nose", "viol")]
+            ranges[ax] = dict(range=[xk - back, xk + ahead])
+        kp = min(k, len(tr_p.x) - 1);  kr = min(k, len(tr_r.x) - 1)
+        data += [go.Scatter(x=np.arange(kp + 1)*ds, y=tr_p.alpha[:kp + 1]),
+                 go.Scatter(x=np.arange(kr + 1)*ds, y=tr_r.alpha[:kr + 1]),
+                 go.Scatter(x=[k*ds, k*ds], y=[-0.05, 1.15])]
+        idx += [anim_idx["p_alpha"], anim_idx["r_alpha"], anim_idx["cursor"]]
+        return data, idx, ranges
+
+    def _title(k):
+        parts = [f"k = {k:3d}   t = {k*Ts:4.1f} s   x = {k*ds:6.1f} m"]
+        kp = min(k, len(tr_p.x) - 1)
+        parts.append(f"HT-MPC α<sub>k</sub> = {min(tr_p.alpha[kp], 1.):.3f}")
+        if not tr_p.ok and k >= len(tr_p.x):
+            parts.append(f"<b style='color:{_HEX['p']}'>HT-MPC infeasible at k = {len(tr_p.x)}</b>")
+        if not tr_r.ok and k >= len(tr_r.x):
+            parts.append(f"<b style='color:{_HEX['r']}'>RT-MPC infeasible at k = {len(tr_r.x)}</b>")
+        return "   |   ".join(parts)
+
+    frames = []
+    for k in range(T_max):
+        data, idx, ranges = _frame(k)
+        frames.append(go.Frame(data=data, traces=idx, name=str(k),
+                               layout=go.Layout(title_text=_title(k), **ranges)))
+    fig.frames = frames
+    d0, i0, r0 = _frame(0)
+    for tr_, i_ in zip(d0, i0):
+        fig.data[i_].x = tr_.x;  fig.data[i_].y = tr_.y
+
+    lab_every = 5 if T_max <= 80 else 10
+    steps = [dict(method="animate", label=(f"{k*Ts:.1f}" if k % lab_every == 0 else ""),
+                  args=[[str(k)], dict(mode="immediate", frame=dict(duration=0, redraw=True),
+                                       transition=dict(duration=0))])
+             for k in range(T_max)]
+    fig.update_layout(
+        height=height, template="plotly_white",
+        title=dict(text=_title(0), x=0.01, xanchor="left", yref="paper", y=1.0,
+                   yanchor="bottom", pad=dict(b=28), font=dict(size=12)),
+        legend=dict(orientation="h", y=-0.24, yanchor="top", x=0, font=dict(size=10)),
+        margin=dict(l=60, r=20, t=90, b=120),
+        updatemenus=[dict(type="buttons", showactive=False, x=1.0, xanchor="right",
+                          y=1.0, yanchor="bottom", pad=dict(b=22), direction="left",
+                          buttons=[
+                              dict(label="▶ Play", method="animate",
+                                   args=[None, dict(frame=dict(duration=frame_ms, redraw=True),
+                                                    fromcurrent=True, transition=dict(duration=0))]),
+                              dict(label="❚❚ Pause", method="animate",
+                                   args=[[None], dict(mode="immediate",
+                                                      frame=dict(duration=0, redraw=True),
+                                                      transition=dict(duration=0))]),
+                          ])],
+        sliders=[dict(active=0, steps=steps, x=0.0, len=1.0, y=-0.06, yanchor="top",
+                      pad=dict(t=0, b=0), ticklen=3, minorticklen=0, font=dict(size=9),
+                      currentvalue=dict(prefix="t = ", suffix=" s", visible=True,
+                                        xanchor="left", font=dict(size=11)))],
+    )
+    ylim = [-W - 0.6, W + 0.6]
+    fig.update_yaxes(title_text="e<sub>y</sub> [m]", range=ylim, row=1, col=1, fixedrange=True)
+    fig.update_yaxes(title_text="e<sub>y</sub> [m]", range=ylim, row=2, col=1, fixedrange=True)
+    fig.update_yaxes(title_text="α<sub>k</sub>", range=[-0.05, 1.15], row=3, col=1)
+    fig.update_xaxes(range=r0["xaxis"]["range"], row=1, col=1, showgrid=False,
+                     zeroline=False, ticksuffix=" m")
+    fig.update_xaxes(range=r0["xaxis2"]["range"], row=2, col=1, showgrid=False,
+                     zeroline=False, ticksuffix=" m")
+    fig.update_xaxes(range=[0, (T_full - 1)*ds], title_text="longitudinal position [m]",
+                     row=3, col=1)
+    if title:
+        fig.layout.annotations[0].text = f"HT-MPC (homothetic tube, proposed) — {title}"
+    return fig
+
+
+animate = animate_road      # default view
 
 
 # ── Static matplotlib summary figure ─────────────────────────────────────────
