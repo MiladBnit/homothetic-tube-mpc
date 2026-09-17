@@ -42,19 +42,25 @@ with st.sidebar:
                       float(H.PRESETS[mode]["T_sim"]), 0.5, key=f"tsim_{mode}")
     custom = ""
     if mode == "Custom waypoints":
-        st.caption("Custom reference: the lane position e_y is held from each time t until the "
-                   "next row. Edit the cells, add or delete rows.")
-        wp = st.data_editor(
-            pd.DataFrame({"t [s]": [0.0, 1.2, 3.5], "e_y [m]": [-1.75, 1.75, 0.0]}),
-            num_rows="dynamic", hide_index=True, key="waypoints",
-            column_config={
-                "t [s]":   st.column_config.NumberColumn(min_value=0.0, max_value=15.0, step=0.1,
-                                                         format="%.1f"),
-                "e_y [m]": st.column_config.NumberColumn(min_value=-2.25, max_value=2.25, step=0.05,
-                                                         format="%.2f"),
-            })
-        wp = wp.dropna()
-        custom = "; ".join(f"{t}:{y}" for t, y in zip(wp["t [s]"], wp["e_y [m]"]))
+        n_seg = int(st.number_input("segments", 2, 12, 4, step=1))
+        st.caption("One column per segment: its duration [s] and the lane position e_y [m] it "
+                   "holds. The last duration is filled automatically to add up to T_sim.")
+        _y0 = [-1.75, 1.75, 0.0, -1.75, 1.75, 0.0, -1.75, 1.75, 0.0, -1.75, 1.75, 0.0]
+        base = pd.DataFrame({f"seg {i+1}": [round(T_sim/n_seg, 1), _y0[i]] for i in range(n_seg)},
+                            index=["duration [s]", "e_y [m]"])
+        tab = st.data_editor(base, key=f"segtab_{n_seg}_{T_sim}",
+                             column_config={f"seg {i+1}": st.column_config.NumberColumn(
+                                 min_value=-2.25, max_value=15.0, step=0.05, format="%.2f")
+                                 for i in range(n_seg)})
+        dur = [float(tab.iloc[0, i]) for i in range(n_seg - 1)]
+        rest = round(T_sim - sum(dur), 2)
+        if rest < 0.1:
+            st.error(f"The first {n_seg-1} durations exceed T_sim = {T_sim:.1f} s.")
+            st.stop()
+        st.caption(f"last segment: {rest:.1f} s   (segment starts: " +
+                   ", ".join(f"{t:.1f}" for t in [0.0] + list(pd.Series(dur).cumsum())) + ")")
+        starts = [0.0] + list(pd.Series(dur).cumsum())
+        custom = "; ".join(f"{starts[i]:.3f}:{float(tab.iloc[1, i])}" for i in range(n_seg))
     p_conf = st.select_slider("confidence level p of the uncertainty bounds", P_LEVELS, 0.99,
                               format_func=lambda v: f"{v:g}")
     panels = st.checkbox("also animate α_k and δ_s", False)
