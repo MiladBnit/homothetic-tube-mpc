@@ -6,6 +6,7 @@ Streamlit front-end for the interactive HT-MPC vs RT-MPC lane-change demo.
 Every control change re-simulates both closed loops (~1 s) and rebuilds the animation.
 The engine (htmpc_latveh.py) contains a verbatim copy of the benchmark controllers.
 """
+import pandas as pd
 import streamlit as st
 from packaging.version import Version
 
@@ -37,10 +38,23 @@ def run_cached(p_conf, mode, T_sim, custom):
 with st.sidebar:
     st.title("Controls")
     mode = st.selectbox("Manoeuvre", MENU, index=0)
-    custom = st.text_input("Custom waypoints  t:y; t:y; ...  (s : m)",
-                           "0:-1.75; 1.2:1.75; 3.5:0.0", disabled=(mode != "Custom waypoints"))
     T_sim = st.slider("T_sim - simulation length [s]", 2.0, 15.0,
                       float(H.PRESETS[mode]["T_sim"]), 0.5, key=f"tsim_{mode}")
+    custom = ""
+    if mode == "Custom waypoints":
+        st.caption("Custom reference: the lane position e_y is held from each time t until the "
+                   "next row. Edit the cells, add or delete rows.")
+        wp = st.data_editor(
+            pd.DataFrame({"t [s]": [0.0, 1.2, 3.5], "e_y [m]": [-1.75, 1.75, 0.0]}),
+            num_rows="dynamic", hide_index=True, key="waypoints",
+            column_config={
+                "t [s]":   st.column_config.NumberColumn(min_value=0.0, max_value=15.0, step=0.1,
+                                                         format="%.1f"),
+                "e_y [m]": st.column_config.NumberColumn(min_value=-2.25, max_value=2.25, step=0.05,
+                                                         format="%.2f"),
+            })
+        wp = wp.dropna()
+        custom = "; ".join(f"{t}:{y}" for t, y in zip(wp["t [s]"], wp["e_y [m]"]))
     p_conf = st.select_slider("confidence level p of the uncertainty bounds", P_LEVELS, 0.99,
                               format_func=lambda v: f"{v:g}")
     panels = st.checkbox("also animate α_k and δ_s", False)

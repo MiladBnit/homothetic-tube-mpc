@@ -1199,12 +1199,10 @@ def animate_overlay(d: Design, tr_p: Trace, tr_r: Trace, y_ref_sig, title=None,
                                        showlegend=False, hoverinfo="skip"))
         if panels:
             _add(f"{key}_alpha", go.Scatter(x=[], y=[], mode="lines",
-                                            line=dict(color=col, width=1.6,
-                                                      dash=("dash" if key == "r" else "solid")),
+                                            line=dict(color=col, width=1.8),
                                             showlegend=False, hoverinfo="skip"), row=2)
             _add(f"{key}_u", go.Scatter(x=[], y=[], mode="lines", line_shape="hv",
-                                        line=dict(color=col, width=1.6,
-                                                  dash=("dash" if key == "r" else "solid")),
+                                        line=dict(color=col, width=1.8),
                                         showlegend=False, hoverinfo="skip"), row=3)
 
     def _frame(k):
