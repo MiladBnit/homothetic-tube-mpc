@@ -584,13 +584,13 @@ def parse_waypoints(text: str) -> List[Tuple[float, float]]:
 
 
 def waypoints_for(mode, t_lc=1.2, t_hold=2.0, y_lane=1.75, T_sim=5.0, custom=""):
-    y_slow, y_fast = -y_lane, +y_lane
+    y_right, y_left = -y_lane, +y_lane
     if mode == MANOEUVRES[0]:
-        return [(0., y_slow), (t_lc, y_fast)]
+        return [(0., y_right), (t_lc, y_left)]
     if mode == MANOEUVRES[1]:
-        return [(0., y_slow), (t_lc, y_fast), (t_lc + t_hold, y_slow)]
+        return [(0., y_right), (t_lc, y_left), (t_lc + t_hold, y_right)]
     if mode == MANOEUVRES[2]:
-        pts, t, y = [(0., y_slow)], t_lc, y_fast
+        pts, t, y = [(0., y_right)], t_lc, y_left
         while t < T_sim:
             pts.append((t, y));  t += t_hold;  y = -y
         return pts
@@ -891,9 +891,9 @@ def animate_track(d: Design, tr_p: Trace, tr_r: Trace, y_ref_sig, title=None,
     fig.update_yaxes(title_text="α<sub>k</sub>", range=[-0.05, 1.15], row=3, col=1)
     fig.update_xaxes(range=[0, x_end], row=3, col=1, title_text="longitudinal distance [m]")
     for row in (1, 2):
-        fig.add_annotation(x=0.5, y=-W + 0.15, text="slow lane", showarrow=False, xanchor="left",
+        fig.add_annotation(x=0.5, y=-W + 0.15, text="right lane", showarrow=False, xanchor="left",
                            font=dict(size=10, color=_HEX["constr"]), row=row, col=1)
-        fig.add_annotation(x=0.5, y=W - 0.15, text="fast lane", showarrow=False, xanchor="left",
+        fig.add_annotation(x=0.5, y=W - 0.15, text="left lane", showarrow=False, xanchor="left",
                            font=dict(size=10, color=_HEX["constr"]), row=row, col=1)
     if title:
         fig.layout.annotations[0].text = f"HT-MPC (homothetic tube, proposed) — {title}"
@@ -958,11 +958,11 @@ def animate_road(d: Design, tr_p: Trace, tr_r: Trace, y_ref_sig, title=None,
                                  line=dict(color=_HEX["ref"], width=1), name="reference",
                                  showlegend=(row == 1), hoverinfo="skip"), row=row, col=1)
         fig.add_annotation(x=0.01, y=-W + 0.15, xref=f"x{'' if row == 1 else row} domain",
-                           yref=f"y{'' if row == 1 else row}", text="slow lane",
+                           yref=f"y{'' if row == 1 else row}", text="right lane",
                            showarrow=False, xanchor="left", yanchor="bottom",
                            font=dict(size=10, color="#555"))
         fig.add_annotation(x=0.01, y=W - 0.15, xref=f"x{'' if row == 1 else row} domain",
-                           yref=f"y{'' if row == 1 else row}", text="fast lane",
+                           yref=f"y{'' if row == 1 else row}", text="left lane",
                            showarrow=False, xanchor="left", yanchor="top",
                            font=dict(size=10, color="#555"))
     fig.add_shape(type="line", x0=0, x1=(T_full - 1)*ds, y0=1, y1=1, row=3, col=1,
@@ -1241,10 +1241,10 @@ def animate_overlay(d: Design, tr_p: Trace, tr_r: Trace, y_ref_sig, title=None,
                       currentvalue=dict(prefix="t = ", suffix=" s", visible=True,
                                         xanchor="left", font=dict(size=11)))],
     )
-    fig.add_annotation(x=0.005, y=-W + 0.15, xref="x domain", yref="y", text="slow lane",
+    fig.add_annotation(x=0.005, y=-W + 0.15, xref="x domain", yref="y", text="right lane",
                        showarrow=False, xanchor="left", yanchor="bottom",
                        font=dict(size=10, color=_HEX["constr"]))
-    fig.add_annotation(x=0.005, y=W - 0.15, xref="x domain", yref="y", text="fast lane",
+    fig.add_annotation(x=0.005, y=W - 0.15, xref="x domain", yref="y", text="left lane",
                        showarrow=False, xanchor="left", yanchor="top",
                        font=dict(size=10, color=_HEX["constr"]))
     return fig
@@ -1285,8 +1285,8 @@ def plot_static(d: Design, tr_p: Trace, tr_r: Trace, y_ref_sig, title=None, show
             ax_a.text(xl[-1], 0.55, f" {LABELS[key]} infeasible (k={len(xl)})",
                       color=C[key], fontsize=8, va="center", ha="left")
     ax.set_ylabel(r"$e_y$ [m]");  ax.set_ylim(-W-0.4, W+0.4)
-    ax.text(x_ref[-1]*0.01, -W+0.12, "slow lane", color=C["constr"], fontsize=8, va="bottom")
-    ax.text(x_ref[-1]*0.01,  W-0.12, "fast lane", color=C["constr"], fontsize=8, va="top")
+    ax.text(x_ref[-1]*0.01, -W+0.12, "right lane", color=C["constr"], fontsize=8, va="bottom")
+    ax.text(x_ref[-1]*0.01,  W-0.12, "left lane", color=C["constr"], fontsize=8, va="top")
     ax.legend(handles=[
         Line2D([0], [0], color=C["ref"], lw=0.8,          label="Reference"),
         Line2D([0], [0], color=C["p"],   lw=1.0, ls="--", label=LABELS["p"]),

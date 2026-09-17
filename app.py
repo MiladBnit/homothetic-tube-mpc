@@ -43,7 +43,7 @@ with st.sidebar:
     t_lc   = st.slider("t_lc - first lane change [s]", 0.2, 4.0, 1.2, 0.1, disabled=is_custom)
     t_hold = st.slider("t_hold - time before switching back [s]", 0.3, 5.0, 2.0, 0.1,
                        disabled=is_custom or mode == H.MANOEUVRES[0])
-    y_lane = st.slider("y_lane - lanes at ±y_lane [m]", 0.25, float(np.floor(d.y_ref_max*20)/20),
+    y_lane = st.slider("y_lane - right/left lane at ∓y_lane [m]", 0.25, float(np.floor(d.y_ref_max*20)/20),
                        1.75, 0.05, disabled=is_custom)
     ramp   = st.slider("ramp - linear transition [s]  (0 = step, as in the paper)",
                        0.0, 2.0, 0.0, 0.1)
@@ -71,7 +71,8 @@ st.markdown(
     "Both controllers use the **same** disturbance bound and the **same** RPI ellipsoid "
     "$\\Omega$. HT-MPC scales its tube online by $\\alpha_k=\\|e_k\\|_{P^{-1}}$; RT-MPC "
     "always uses the full worst-case tube ($\\alpha_k\\equiv 1$). Change anything in the "
-    "sidebar and both closed loops are re-simulated; press **▶ Play** on the figure."
+    "sidebar and both closed loops are re-simulated; press **▶ Play** on the figure. "
+    "The vehicle travels at constant speed ($v_x = 60$ km/h); the lanes differ only in lateral offset."
 )
 
 # ── Run ───────────────────────────────────────────────────────────────────────

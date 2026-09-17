@@ -14,9 +14,9 @@ adaptation $\alpha_k = \|e_k\|_{P^{-1}}$.
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://<YOUR-APP>.streamlit.app)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MiladBnit/homothetic-tube-mpc/blob/main/LatVeh_Interactive.ipynb)
 
-Design your own lane-change manoeuvre (single / double lane change, slalom, custom
-waypoints, step or ramped reference) and watch both controllers drive it step by step —
-vehicle, current tube cross-section, and the prediction the MPC is making at that instant.
+Design your own constant-speed lane-change manoeuvre (single / double lane change, slalom,
+custom waypoints, step or ramped reference) and watch the paper's figure being drawn as both
+controllers drive it: the two trajectories with their tube bands, growing in time.
 
 ## Contents
 
