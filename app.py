@@ -58,6 +58,7 @@ with st.sidebar:
     p_conf = st.select_slider("confidence level p of the uncertainty bounds", P_LEVELS, 0.99,
                               format_func=lambda v: f"{v:g}")
     panels = st.checkbox("also animate α_k and δ_s", False)
+    dark = st.checkbox("dark background", False)
     view = st.radio("view", ["paper figure (animated)", "whole track + predictions",
                              "road view (chase camera)"], index=0)
     st.divider()
@@ -103,12 +104,16 @@ cols[5].metric("constraint violations", f"{sp['state_violations']} / {sr['state_
 # ── Animation ─────────────────────────────────────────────────────────────────
 ttl = f"{mode},  p = {p_conf:g}"
 frame_ms = int(round(1000*d.Ts))
+theme = "dark" if dark else "light"
 if view.startswith("paper"):
-    fig = H.animate_overlay(d, tr_p, tr_r, y_ref, title=ttl, frame_ms=frame_ms, panels=panels)
+    fig = H.animate_overlay(d, tr_p, tr_r, y_ref, title=ttl, frame_ms=frame_ms, panels=panels,
+                            theme=theme)
 elif view.startswith("whole"):
-    fig = H.animate_track(d, tr_p, tr_r, y_ref, title=ttl, frame_ms=frame_ms, height=760)
+    fig = H.animate_track(d, tr_p, tr_r, y_ref, title=ttl, frame_ms=frame_ms, height=760,
+                          theme=theme)
 else:
-    fig = H.animate_road(d, tr_p, tr_r, y_ref, title=ttl, frame_ms=frame_ms, height=760)
+    fig = H.animate_road(d, tr_p, tr_r, y_ref, title=ttl, frame_ms=frame_ms, height=760,
+                         theme=theme)
 st.plotly_chart(fig, theme=None, config={"displaylogo": False}, **_FULL)
 
 with st.expander("What am I looking at?"):

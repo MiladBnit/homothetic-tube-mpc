@@ -734,8 +734,24 @@ def _rgba(hexcol, a):
     return f"rgba({int(h[0:2],16)},{int(h[2:4],16)},{int(h[4:6],16)},{a})"
 
 
+_PALETTES = {
+    # paper colours on white
+    "light": dict(p="#007E5C", r="#FF4500", ref="#1D1D1D", constr="#A80000",
+                  template="plotly_white", road="#e9e9e9", lane_txt="#555555", grid="grey",
+                  band_r=0.15, band_p=0.30),
+    # brighter, higher-contrast variants for a dark background
+    "dark":  dict(p="#3DDC97", r="#FF9F43", ref="#F2F2F2", constr="#FF6B6B",
+                  template="plotly_dark", road="#2e2e2e", lane_txt="#bbbbbb", grid="#aaaaaa",
+                  band_r=0.32, band_p=0.45),
+}
+
+
+def _palette(theme):
+    return _PALETTES["dark" if str(theme).lower() == "dark" else "light"]
+
+
 def animate_track(d: Design, tr_p: Trace, tr_r: Trace, y_ref_sig, title=None,
-                  frame_ms: int = 100, height: int = 820):
+                  frame_ms: int = 100, height: int = 820, theme: str = "light"):
     """
     Whole-track Plotly animation of both closed loops (fixed camera).
       row 1: HT-MPC  - past path, vehicle, current tube alpha_k*Omega, predicted
@@ -743,6 +759,7 @@ def animate_track(d: Design, tr_p: Trace, tr_r: Trace, y_ref_sig, title=None,
       row 2: RT-MPC  - same with the fixed tube Omega
       row 3: alpha_k of both controllers, with a cursor
     """
+    HX = _palette(theme)
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
 
@@ -766,12 +783,12 @@ def animate_track(d: Design, tr_p: Trace, tr_r: Trace, y_ref_sig, title=None,
                               (d.x_bounds[0], 0.8, "dash"), (-d.x_bounds[0], 0.8, "dash"),
                               (0., 0.6, "dot")):
             fig.add_shape(type="line", x0=0, x1=x_end, y0=yv, y1=yv, row=row, col=1,
-                          line=dict(color=_HEX["constr"], width=wdt, dash=dash), opacity=0.7)
+                          line=dict(color=HX["constr"], width=wdt, dash=dash), opacity=0.7)
         fig.add_trace(go.Scatter(x=s_ref, y=y_ref_ext, mode="lines", line_shape="hv",
-                                 line=dict(color=_HEX["ref"], width=1), name="reference",
+                                 line=dict(color=HX["ref"], width=1), name="reference",
                                  showlegend=(row == 1), hoverinfo="skip"), row=row, col=1)
     fig.add_shape(type="line", x0=0, x1=x_end, y0=1, y1=1, row=3, col=1,
-                  line=dict(color="grey", width=0.6, dash="dot"))
+                  line=dict(color=HX["grid"], width=0.6, dash="dot"))
 
     # animated traces - keep the order, the frames refer to these indices
     anim_idx = {}
@@ -781,7 +798,7 @@ def animate_track(d: Design, tr_p: Trace, tr_r: Trace, y_ref_sig, title=None,
         fig.add_trace(trace, row=row, col=1)
 
     for key, tr, row in (("p", tr_p, 1), ("r", tr_r, 2)):
-        col, lbl = _HEX[key], LABELS[key]
+        col, lbl = HX[key], LABELS[key]
         _add(f"{key}_band", go.Scatter(x=[], y=[], mode="lines", fill="toself",
                                        fillcolor=_rgba(col, 0.22), line=dict(width=0),
                                        name=f"{lbl}: predicted tube α<sub>j|k</sub>Ω" if key == "p"
@@ -807,11 +824,11 @@ def animate_track(d: Design, tr_p: Trace, tr_r: Trace, y_ref_sig, title=None,
                                       marker=dict(symbol="triangle-right", size=16, color=col,
                                                   line=dict(color="black", width=0.8)),
                                       name=f"{lbl}: vehicle", showlegend=False), row)
-    _add("p_alpha", go.Scatter(x=[], y=[], mode="lines", line=dict(color=_HEX["p"], width=2),
+    _add("p_alpha", go.Scatter(x=[], y=[], mode="lines", line=dict(color=HX["p"], width=2),
                                name="α<sub>k</sub> HT-MPC"), 3)
-    _add("r_alpha", go.Scatter(x=[], y=[], mode="lines", line=dict(color=_HEX["r"], width=2,
+    _add("r_alpha", go.Scatter(x=[], y=[], mode="lines", line=dict(color=HX["r"], width=2,
                                dash="dash"), name="α<sub>k</sub> RT-MPC (= 1)"), 3)
-    _add("cursor", go.Scatter(x=[], y=[], mode="lines", line=dict(color="grey", width=1),
+    _add("cursor", go.Scatter(x=[], y=[], mode="lines", line=dict(color=HX["grid"], width=1),
                               showlegend=False, hoverinfo="skip"), 3)
 
     # frames
@@ -852,9 +869,9 @@ def animate_track(d: Design, tr_p: Trace, tr_r: Trace, y_ref_sig, title=None,
         kp = min(k, len(tr_p.x) - 1)
         parts.append(f"HT-MPC α<sub>k</sub> = {min(tr_p.alpha[kp], 1.):.3f}")
         if not tr_p.ok and k >= len(tr_p.x):
-            parts.append(f"<b style='color:{_HEX['p']}'>HT-MPC infeasible at k = {len(tr_p.x)}</b>")
+            parts.append(f"<b style='color:{HX['p']}'>HT-MPC infeasible at k = {len(tr_p.x)}</b>")
         if not tr_r.ok and k >= len(tr_r.x):
-            parts.append(f"<b style='color:{_HEX['r']}'>RT-MPC infeasible at k = {len(tr_r.x)}</b>")
+            parts.append(f"<b style='color:{HX['r']}'>RT-MPC infeasible at k = {len(tr_r.x)}</b>")
         return "   |   ".join(parts)
 
     frames = []
@@ -875,7 +892,7 @@ def animate_track(d: Design, tr_p: Trace, tr_r: Trace, y_ref_sig, title=None,
                                        transition=dict(duration=0))])
              for k in range(T_max)]
     fig.update_layout(
-        height=height, template="plotly_white",
+        height=height, template=HX["template"],
         title=dict(text=_frame_title(0), x=0.01, xanchor="left", yref="paper", y=1.0,
                    yanchor="bottom", pad=dict(b=28), font=dict(size=12)),
         legend=dict(orientation="h", y=-0.27, yanchor="top", x=0, font=dict(size=10)),
@@ -904,9 +921,9 @@ def animate_track(d: Design, tr_p: Trace, tr_r: Trace, y_ref_sig, title=None,
     fig.update_xaxes(range=[0, x_end], row=3, col=1, title_text="longitudinal distance [m]")
     for row in (1, 2):
         fig.add_annotation(x=0.5, y=-W + 0.15, text="right lane", showarrow=False, xanchor="left",
-                           font=dict(size=10, color=_HEX["constr"]), row=row, col=1)
+                           font=dict(size=10, color=HX["constr"]), row=row, col=1)
         fig.add_annotation(x=0.5, y=W - 0.15, text="left lane", showarrow=False, xanchor="left",
-                           font=dict(size=10, color=_HEX["constr"]), row=row, col=1)
+                           font=dict(size=10, color=HX["constr"]), row=row, col=1)
     if title:
         fig.layout.annotations[0].text = f"HT-MPC (homothetic tube, proposed) — {title}"
     return fig
@@ -931,13 +948,15 @@ def _car_polygon(x, y, psi, L=_CAR_L, W=_CAR_W, front_only=False):
 
 
 def animate_road(d: Design, tr_p: Trace, tr_r: Trace, y_ref_sig, title=None,
-                 frame_ms: int = 100, height: int = 720, window: float = 60.0):
+                 frame_ms: int = 100, height: int = 720, window: float = 60.0,
+                 theme: str = "light"):
     """
     Road view: two road strips (HT-MPC on top, RT-MPC below), a chase camera that follows
     each vehicle, the vehicle drawn to scale and rotated by its heading error, the current
     tube cross-section alpha_k*Omega as a shaded patch around the nominal position, the
     predicted nominal path z_{j|k} with its tube ahead, and alpha_k in a third panel.
     """
+    HX = _palette(theme)
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
 
@@ -959,26 +978,26 @@ def animate_road(d: Design, tr_p: Trace, tr_r: Trace, y_ref_sig, title=None,
     # ── static road furniture ────────────────────────────────────────────────
     for row in (1, 2):
         fig.add_shape(type="rect", x0=-back, x1=x_end, y0=-W, y1=W, row=row, col=1,
-                      fillcolor="#e9e9e9", line=dict(width=0), layer="below")
+                      fillcolor=HX["road"], line=dict(width=0), layer="below")
         for yv, wdt, dash, col in ((W, 2.0, "solid", "#444"), (-W, 2.0, "solid", "#444"),
                                    (0., 1.2, "dash", "white"),
-                                   (d.x_bounds[0], 0.8, "dot", _HEX["constr"]),
-                                   (-d.x_bounds[0], 0.8, "dot", _HEX["constr"])):
+                                   (d.x_bounds[0], 0.8, "dot", HX["constr"]),
+                                   (-d.x_bounds[0], 0.8, "dot", HX["constr"])):
             fig.add_shape(type="line", x0=-back, x1=x_end, y0=yv, y1=yv, row=row, col=1,
                           line=dict(color=col, width=wdt, dash=dash), layer="below")
         fig.add_trace(go.Scatter(x=s_ref, y=y_ref_ext, mode="lines", line_shape="hv",
-                                 line=dict(color=_HEX["ref"], width=1), name="reference",
+                                 line=dict(color=HX["ref"], width=1), name="reference",
                                  showlegend=(row == 1), hoverinfo="skip"), row=row, col=1)
         fig.add_annotation(x=0.01, y=-W + 0.15, xref=f"x{'' if row == 1 else row} domain",
                            yref=f"y{'' if row == 1 else row}", text="right lane",
                            showarrow=False, xanchor="left", yanchor="bottom",
-                           font=dict(size=10, color="#555"))
+                           font=dict(size=10, color=HX["lane_txt"]))
         fig.add_annotation(x=0.01, y=W - 0.15, xref=f"x{'' if row == 1 else row} domain",
                            yref=f"y{'' if row == 1 else row}", text="left lane",
                            showarrow=False, xanchor="left", yanchor="top",
-                           font=dict(size=10, color="#555"))
+                           font=dict(size=10, color=HX["lane_txt"]))
     fig.add_shape(type="line", x0=0, x1=(T_full - 1)*ds, y0=1, y1=1, row=3, col=1,
-                  line=dict(color="grey", width=0.6, dash="dot"))
+                  line=dict(color=HX["grid"], width=0.6, dash="dot"))
 
     # ── animated traces (order matters, frames refer to these indices) ───────
     anim_idx = {}
@@ -988,7 +1007,7 @@ def animate_road(d: Design, tr_p: Trace, tr_r: Trace, y_ref_sig, title=None,
         fig.add_trace(trace, row=row, col=1)
 
     for key, row in (("p", 1), ("r", 2)):
-        col, lbl = _HEX[key], LABELS[key]
+        col, lbl = HX[key], LABELS[key]
         _add(f"{key}_band", go.Scatter(x=[], y=[], mode="lines", fill="toself",
                                        fillcolor=_rgba(col, 0.18), line=dict(width=0),
                                        name=f"{lbl}: predicted tube " +
@@ -1017,12 +1036,12 @@ def animate_road(d: Design, tr_p: Trace, tr_r: Trace, y_ref_sig, title=None,
                                                    line=dict(width=2)),
                                        name=f"{lbl}: constraint violation",
                                        showlegend=False, hoverinfo="skip"), row)
-    _add("p_alpha", go.Scatter(x=[], y=[], mode="lines", line=dict(color=_HEX["p"], width=2),
+    _add("p_alpha", go.Scatter(x=[], y=[], mode="lines", line=dict(color=HX["p"], width=2),
                                name="α<sub>k</sub> HT-MPC"), 3)
     _add("r_alpha", go.Scatter(x=[], y=[], mode="lines",
-                               line=dict(color=_HEX["r"], width=2, dash="dash"),
+                               line=dict(color=HX["r"], width=2, dash="dash"),
                                name="α<sub>k</sub> RT-MPC (= 1)"), 3)
-    _add("cursor", go.Scatter(x=[], y=[], mode="lines", line=dict(color="grey", width=1),
+    _add("cursor", go.Scatter(x=[], y=[], mode="lines", line=dict(color=HX["grid"], width=1),
                               showlegend=False, hoverinfo="skip"), 3)
 
     # ── frames ───────────────────────────────────────────────────────────────
@@ -1068,9 +1087,9 @@ def animate_road(d: Design, tr_p: Trace, tr_r: Trace, y_ref_sig, title=None,
         kp = min(k, len(tr_p.x) - 1)
         parts.append(f"HT-MPC α<sub>k</sub> = {min(tr_p.alpha[kp], 1.):.3f}")
         if not tr_p.ok and k >= len(tr_p.x):
-            parts.append(f"<b style='color:{_HEX['p']}'>HT-MPC infeasible at k = {len(tr_p.x)}</b>")
+            parts.append(f"<b style='color:{HX['p']}'>HT-MPC infeasible at k = {len(tr_p.x)}</b>")
         if not tr_r.ok and k >= len(tr_r.x):
-            parts.append(f"<b style='color:{_HEX['r']}'>RT-MPC infeasible at k = {len(tr_r.x)}</b>")
+            parts.append(f"<b style='color:{HX['r']}'>RT-MPC infeasible at k = {len(tr_r.x)}</b>")
         return "   |   ".join(parts)
 
     frames = []
@@ -1089,7 +1108,7 @@ def animate_road(d: Design, tr_p: Trace, tr_r: Trace, y_ref_sig, title=None,
                                        transition=dict(duration=0))])
              for k in range(T_max)]
     fig.update_layout(
-        height=height, template="plotly_white",
+        height=height, template=HX["template"],
         title=dict(text=_title(0), x=0.01, xanchor="left", yref="paper", y=1.0,
                    yanchor="bottom", pad=dict(b=28), font=dict(size=12)),
         legend=dict(orientation="h", y=-0.24, yanchor="top", x=0, font=dict(size=10)),
@@ -1128,7 +1147,8 @@ def animate_road(d: Design, tr_p: Trace, tr_r: Trace, y_ref_sig, title=None,
 # ── Plotly overlay animation (single fixed panel, the paper figure growing in time) ──
 
 def animate_overlay(d: Design, tr_p: Trace, tr_r: Trace, y_ref_sig, title=None,
-                    frame_ms: int = 100, height: Optional[int] = None, panels: bool = False):
+                    frame_ms: int = 100, height: Optional[int] = None, panels: bool = False,
+                    theme: str = "light"):
     """
     The paper's lane-change figure, animated in a single fixed frame: at frame k the
     HT-MPC (green) and RT-MPC (orange) trajectories e_y(x) and their tube bands
@@ -1137,6 +1157,7 @@ def animate_overlay(d: Design, tr_p: Trace, tr_r: Trace, y_ref_sig, title=None,
     panels=True adds two synchronised rows below: the tube scale alpha_k and the
     steering angle delta_s (with its bounds), also drawn progressively.
     """
+    HX = _palette(theme)
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
 
@@ -1161,16 +1182,16 @@ def animate_overlay(d: Design, tr_p: Trace, tr_r: Trace, y_ref_sig, title=None,
                           (d.x_bounds[0], 0.8, "dash"), (-d.x_bounds[0], 0.8, "dash"),
                           (0., 0.6, "dot")):
         fig.add_shape(type="line", x0=0, x1=x_end, y0=yv, y1=yv, row=1, col=1,
-                      line=dict(color=_HEX["constr"], width=wdt, dash=dash), opacity=0.7)
+                      line=dict(color=HX["constr"], width=wdt, dash=dash), opacity=0.7)
     fig.add_trace(go.Scatter(x=s_ref, y=y_ref_sig, mode="lines", line_shape="hv",
-                             line=dict(color=_HEX["ref"], width=1), name="Reference",
+                             line=dict(color=HX["ref"], width=1), name="Reference",
                              hoverinfo="skip"), row=1, col=1)
     if panels:
         fig.add_shape(type="line", x0=0, x1=x_end, y0=1, y1=1, row=2, col=1,
-                      line=dict(color="grey", width=0.6, dash="dot"))
+                      line=dict(color=HX["grid"], width=0.6, dash="dot"))
         for sgn in (+1, -1):
             fig.add_shape(type="line", x0=0, x1=x_end, y0=sgn*u_max, y1=sgn*u_max, row=3, col=1,
-                          line=dict(color=_HEX["constr"], width=0.8, dash="dash"), opacity=0.7)
+                          line=dict(color=HX["constr"], width=0.8, dash="dash"), opacity=0.7)
 
     # ── animated traces (order = frame trace indices) ────────────────────────
     anim_idx = {}
@@ -1180,13 +1201,13 @@ def animate_overlay(d: Design, tr_p: Trace, tr_r: Trace, y_ref_sig, title=None,
         fig.add_trace(trace, row=row, col=1)
 
     # RT first so the (thinner) HT band draws on top, as in the paper
-    for key, band_alpha, band_lbl in (("r", 0.15, "Ω (RT-MPC)"),
-                                      ("p", 0.30, "α<sub>k</sub>Ω (HT-MPC)")):
+    for key, band_alpha, band_lbl in (("r", HX["band_r"], "Ω (RT-MPC)"),
+                                      ("p", HX["band_p"], "α<sub>k</sub>Ω (HT-MPC)")):
         _add(f"{key}_band", go.Scatter(x=[], y=[], mode="lines", fill="toself",
-                                       fillcolor=_rgba(_HEX[key], band_alpha), line=dict(width=0),
+                                       fillcolor=_rgba(HX[key], band_alpha), line=dict(width=0),
                                        name=band_lbl, hoverinfo="skip"))
     for key in ("r", "p"):
-        col, lbl = _HEX[key], LABELS[key]
+        col, lbl = HX[key], LABELS[key]
         _add(f"{key}_path", go.Scatter(x=[], y=[], mode="lines",
                                        line=dict(color=col, width=1.6, dash="dash"), name=lbl))
         _add(f"{key}_head", go.Scatter(x=[], y=[], mode="markers",
@@ -1234,9 +1255,9 @@ def animate_overlay(d: Design, tr_p: Trace, tr_r: Trace, y_ref_sig, title=None,
         parts = [f"k = {k:3d}   t = {k*Ts:4.1f} s   x = {k*ds:6.1f} m",
                  f"HT-MPC α<sub>k</sub> = {min(tr_p.alpha[kp], 1.):.3f}"]
         if not tr_p.ok and k >= len(tr_p.x):
-            parts.append(f"<b style='color:{_HEX['p']}'>HT-MPC infeasible at k = {len(tr_p.x)}</b>")
+            parts.append(f"<b style='color:{HX['p']}'>HT-MPC infeasible at k = {len(tr_p.x)}</b>")
         if not tr_r.ok and k >= len(tr_r.x):
-            parts.append(f"<b style='color:{_HEX['r']}'>RT-MPC infeasible at k = {len(tr_r.x)}</b>")
+            parts.append(f"<b style='color:{HX['r']}'>RT-MPC infeasible at k = {len(tr_r.x)}</b>")
         if title:
             parts.insert(0, title)
         return "   |   ".join(parts)
@@ -1259,7 +1280,7 @@ def animate_overlay(d: Design, tr_p: Trace, tr_r: Trace, y_ref_sig, title=None,
     # vertical placement of slider / legend below the (last) x axis, in paper units
     sl_y, lg_y = (-0.08, -0.26) if panels else (-0.12, -0.40)
     fig.update_layout(
-        height=height, template="plotly_white",
+        height=height, template=HX["template"],
         title=dict(text=_title(0), x=0.01, xanchor="left", yref="paper", y=1.0,
                    yanchor="bottom", pad=dict(b=10), font=dict(size=12)),
         legend=dict(orientation="h", y=lg_y, yanchor="top", x=0, font=dict(size=10)),
@@ -1293,10 +1314,10 @@ def animate_overlay(d: Design, tr_p: Trace, tr_r: Trace, y_ref_sig, title=None,
                          row=3, col=1)
     fig.add_annotation(x=0.005, y=-W + 0.15, xref="x domain", yref="y", text="right lane",
                        showarrow=False, xanchor="left", yanchor="bottom",
-                       font=dict(size=10, color=_HEX["constr"]))
+                       font=dict(size=10, color=HX["constr"]))
     fig.add_annotation(x=0.005, y=W - 0.15, xref="x domain", yref="y", text="left lane",
                        showarrow=False, xanchor="left", yanchor="top",
-                       font=dict(size=10, color=_HEX["constr"]))
+                       font=dict(size=10, color=HX["constr"]))
     return fig
 
 
