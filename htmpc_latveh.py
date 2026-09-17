@@ -4,7 +4,8 @@ htmpc_latveh.py - engine for the interactive HT-MPC vs RT-MPC lane-change demo
 
 Section 1 (down to the "INTERACTIVE EXTENSIONS" banner) is a VERBATIM copy of the
 model / uncertainty / RPI / tightening / OCP / simulator code of
-``LatVeh_Benchmark.ipynb`` (the frozen, reviewer-facing notebook).  Nothing in
+``LatVeh_Benchmark.ipynb`` (the reviewer-facing notebook; single-track model with
+front steering as the only input).  Nothing in
 that section has been modified.
 
 Section 2 adds what the interactive demo needs on top of it:
@@ -92,16 +93,16 @@ def _Ac(vx):
 def _Bc():
     m, Iz, lf, Cf = _m, _Iz, _lf, _Cf
     return np.array([
-        [0.,           0.   ],
-        [0.,           0.   ],
-        [2.*Cf/m,      0.   ],
-        [2.*Cf*lf/Iz,  1./Iz],
+        [0.          ],
+        [0.          ],
+        [2.*Cf/m     ],
+        [2.*Cf*lf/Iz ],
     ])
 
 
 def discretize(vx, Ts):
     sd = sig.StateSpace(
-        _Ac(vx), _Bc(), np.eye(4), np.zeros((4, 2))
+        _Ac(vx), _Bc(), np.eye(4), np.zeros((4, 1))
     ).to_discrete(Ts)
     return np.array(sd.A), np.array(sd.B)
 
@@ -468,8 +469,6 @@ def run_rtmpc(A, B, A_hat, B_hat, K, C_out,
                      n_viol=0,ok=ok)
 
 
-
-
 # ══════════════════════════════════════════════════════════════════════════════
 #  SECTION 2 - INTERACTIVE EXTENSIONS  (not part of the benchmark)
 # ══════════════════════════════════════════════════════════════════════════════
@@ -505,10 +504,10 @@ def design(verbose: bool = True) -> Design:
     with contextlib.redirect_stdout(buf):
         vx0, Ts = 60.0/3.6, 0.1
         A, B  = discretize(vx0, Ts)
-        n, m  = 4, 2
+        n, m  = 4, 1
         C_out = np.array([[1., 0., 0., 0.]])
 
-        Q_lqr = np.diag([50., 10., 1., 10.]);  R_lqr = np.diag([1.0, 0.1])
+        Q_lqr = np.diag([50., 10., 1., 10.]);  R_lqr = np.diag([1.0])
         P_lqr = la.solve_discrete_are(A, B, Q_lqr, R_lqr)
         K     = -la.solve(R_lqr + B.T@P_lqr@B, B.T@P_lqr@A)
         A_K   = A + B@K
@@ -524,11 +523,11 @@ def design(verbose: bool = True) -> Design:
         Sigma_w  = np.diag([1e-4, 2e-5, 1e-4, 5e-5])*2
         p_conf   = 0.99
 
-        x_bounds = np.array([3.0, 0.30, 2.0, 1.5]);  u_bounds = np.array([0.20, 2.0])
+        x_bounds = np.array([3.0, 0.30, 2.0, 1.5]);  u_bounds = np.array([0.20])
         Hx = np.vstack([np.eye(n), -np.eye(n)]);  h_x = np.tile(x_bounds, 2)
         Hu = np.vstack([np.eye(m), -np.eye(m)]);  h_u = np.tile(u_bounds, 2)
 
-        Q_c = np.diag([20., 5., 0.5, 0.5]);  R_c = np.diag([0.1, 0.01])
+        Q_c = np.diag([20., 5., 0.5, 0.5]);  R_c = np.diag([0.1])
         P_inf = la.solve_discrete_are(A, B, Q_c, R_c)
 
         unc    = UncertaintyModel(Sigma_DA, Sigma_DB, Sigma_w, p_conf, p_conf, p_conf,
