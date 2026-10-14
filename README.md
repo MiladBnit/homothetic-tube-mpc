@@ -14,6 +14,8 @@ Companion code for
 | `Carla_recording.mp4` | **Video** — the paper's lane change performed by HT-MPC in the CARLA simulator |
 | `requirements.txt` | Open-source dependencies (no commercial solver needed) |
 
+![Lane change: HT-MPC vs RT-MPC](fig_lane_change_comparison_alt.png)
+
 ## The controller in CARLA
 
 The lane change of the paper, driven by HT-MPC in the CARLA simulator (Lincoln MKZ at a
@@ -36,6 +38,12 @@ The notebook is self-contained: open the badge, *Runtime ▸ Run all*, then use 
 Choose the manoeuvre (single lane change, slalom, or your own piecewise-constant reference),
 the simulation length, the speed, and the two uncertainty bounds; press **Run** (~1 s) and the
 animation plays by itself.
+
+![The interactive figure](fig_playground_preview.png)
+
+*The figure the playground produces (here with the optional $\alpha_k$ and $\delta_s$ panels):
+the two trajectories with the cross-sections each scheme uses to tighten the current step.
+HT-MPC steers up to 0.166 rad, RT-MPC is confined to the rigid margin of 0.039 rad (dotted).*
 
 Larger bounds mean a larger $\Omega$, more tightening and less steering left to the nominal
 input. The rigid scheme runs out of steering first: around $\overline{\Delta v} = 0.35$ m/s,
