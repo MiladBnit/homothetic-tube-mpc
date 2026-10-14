@@ -6,24 +6,12 @@ Companion code for
 > Milad Banitalebi Dehkordi, Manas Mejari and Dario Piga
 > *(submitted)*
 
-**HT-MPC** (proposed, homothetic tube) and **RT-MPC** (rigid tube) solve the *same* QP, with
-the same RPI ellipsoid $\Omega$, the same terminal cost and the same polytopic terminal set.
-The only difference is the constraint tightening: HT-MPC uses the closed-form scales
-$\alpha_{j|k}$ driven by the measured $\alpha_k = \|e_k\|_{P^{\star-1}}$, RT-MPC uses
-$\alpha_{j|k} \equiv 1$. The uncertainty is given by **bounds** (Assumption 1): a speed-error
-bound $|\Delta v_x| \le \overline{\Delta v}$ and an additive disturbance $w_k$ in an
-ellipsoid.
-
-## Contents
 
 | File | Purpose |
 |---|---|
 | `LatVeh_Benchmark.ipynb` | **Paper figure** — lateral single-track model, lane change at constant speed; produces `fig_lane_change_comparison_alt.png` |
 | `LatVeh_Interactive.ipynb` | **Interactive playground** — the same method (its first code cell is a verbatim copy of the benchmark), with the manoeuvre and the uncertainty bounds as controls and the paper figure drawn as an animation |
 | `requirements.txt` | Open-source dependencies (no commercial solver needed) |
-
-With its default settings the interactive notebook reproduces the benchmark run exactly
-(closed-loop cost 1481.0 for HT-MPC vs 2238.1 for RT-MPC, a 33.8 % reduction).
 
 ## Try it
 
