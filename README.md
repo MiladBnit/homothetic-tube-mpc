@@ -1,8 +1,10 @@
-# Homothetic Tube MPC — Lane-Change Case Study
+# Homothetic Tube MPC with Closed-Form Scaling — Lane-Change Case Study
 
-Companion code for the paper
+Companion code for
 
-> **[Paper title]** — [Authors], *[Journal]*, [year]. [DOI / arXiv link]
+> **Homothetic Tube MPC with Closed-Form Scaling for Uncertain Linear Systems**
+> Milad Banitalebi Dehkordi, Manas Mejari and Dario Piga
+> *(submitted)*
 
 **HT-MPC** (proposed, homothetic tube) and **RT-MPC** (rigid tube) solve the *same* QP, with
 the same RPI ellipsoid $\Omega$, the same terminal cost and the same polytopic terminal set.
@@ -52,17 +54,6 @@ or Gurobi licence is required.
 
 Run `LatVeh_Benchmark.ipynb` top to bottom. All random draws are seeded, so the figure is
 regenerated exactly (up to solver tolerances).
-
-## Citation
-
-```bibtex
-@article{...,
-  title   = {...},
-  author  = {...},
-  journal = {...},
-  year    = {...}
-}
-```
 
 ## License
 
