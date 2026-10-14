@@ -32,12 +32,11 @@ GitHub shows a player on the file page.
 
 ## Try it
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MiladBnit/homothetic-tube-mpc/blob/main/LatVeh_Interactive.ipynb)
-
-The notebook is self-contained: open the badge, *Runtime ▸ Run all*, then use the controls.
-Choose the manoeuvre (single lane change, slalom, or your own piecewise-constant reference),
-the simulation length, the speed, and the two uncertainty bounds; press **Run** (~1 s) and the
-animation plays by itself.
+Open `LatVeh_Interactive.ipynb` in Jupyter or VS Code and run all cells: the controls appear
+right under the (collapsed) method cell, at the top of the notebook. Choose the manoeuvre
+(single lane change, slalom, or your own piecewise-constant reference), the simulation length,
+the speed and the two uncertainty bounds; press **Run** (~1 s) and the animation plays by
+itself.
 
 ![The interactive figure](fig_playground_preview.png)
 
