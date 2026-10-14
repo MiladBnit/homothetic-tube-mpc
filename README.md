@@ -1,88 +1,62 @@
-# Homothetic Tube MPC with Closed-Form Scaling — Lane-Change Case Study
+# Homothetic Tube MPC with Closed-Form Scaling
 
-Companion code for
+**Homothetic Tube MPC with Closed-Form Scaling for Uncertain Linear Systems**
+Milad Banitalebi Dehkordi, Manas Mejari and Dario Piga — *submitted*
 
-> **Homothetic Tube MPC with Closed-Form Scaling for Uncertain Linear Systems**
-> Milad Banitalebi Dehkordi, Manas Mejari and Dario Piga
-> *(submitted)*
+## ▶ [Open the interactive app](https://homothetic-tube-mpc-m2tzxs7zpx8minf6q2znzt.streamlit.app/)
 
+Pick a lane-change manoeuvre, set the speed and the two uncertainty bounds, and watch the
+paper's figure being drawn for both controllers. Nothing to install.
 
-| File | Purpose |
-|---|---|
-| `LatVeh_Benchmark.ipynb` | **Paper figure** — lateral single-track model, lane change at constant speed; produces `fig_lane_change_comparison_alt.png` |
-| `LatVeh_Interactive.ipynb` | **Interactive playground** — the same method (its first code cell is a verbatim copy of the benchmark), with the manoeuvre and the uncertainty bounds as controls and the paper figure drawn as an animation |
-| `Carla_recording.mp4` | **Video** — the paper's lane change performed by HT-MPC in the CARLA simulator |
-| `app.py` | The same playground as a web app (`streamlit run app.py`); loads the method from the notebook |
-| `requirements.txt` | Open-source dependencies (no commercial solver needed) |
+[![The interactive app](fig_playground_preview.png)](https://homothetic-tube-mpc-m2tzxs7zpx8minf6q2znzt.streamlit.app/)
 
-![Lane change: HT-MPC vs RT-MPC](fig_lane_change_comparison_alt.png)
+**HT-MPC** (proposed) and **RT-MPC** (rigid tube) solve the *same* QP, with the same RPI
+ellipsoid $\Omega$, the same terminal cost and the same terminal set. The only difference is
+the constraint tightening: HT-MPC scales it by the measured $\alpha_k = \|e_k\|_{P^{\star-1}}$
+through the closed-form sequence $\alpha_{j|k}$, RT-MPC always uses $\alpha_{j|k} \equiv 1$.
+The uncertainty is given by bounds: a speed error $|\Delta v_x| \le \overline{\Delta v}$ and an
+additive disturbance $w_k$ in an ellipsoid.
+
+Tighten the bounds and the rigid scheme runs out of steering first — at
+$\overline{\Delta v} = 0.35$ m/s, at 45 km/h or above 85 km/h, **RT-MPC's QP becomes
+infeasible while HT-MPC still completes the lane change**.
 
 ## The controller in CARLA
 
-The lane change of the paper, driven by HT-MPC in the CARLA simulator (Lincoln MKZ at a
+The lane change of the paper, driven by HT-MPC in the CARLA simulator — a Lincoln MKZ at a
 constant 60 km/h, lateral control by the closed-form homothetic tube MPC, longitudinal speed
-held by a PID):
-
-https://github.com/MiladBnit/homothetic-tube-mpc/raw/main/Carla_recording.mp4
+held by a PID:
 
 <video src="https://github.com/MiladBnit/homothetic-tube-mpc/raw/main/Carla_recording.mp4"
        controls muted playsinline width="640"></video>
 
-If the player above does not appear, open [`Carla_recording.mp4`](Carla_recording.mp4) —
-GitHub shows a player on the file page.
+If the player does not appear, open [`Carla_recording.mp4`](Carla_recording.mp4).
 
-## Try it in your browser
+## In this repository
 
-[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/MiladBnit/homothetic-tube-mpc/main?urlpath=lab/tree/LatVeh_Interactive.ipynb)
+| | |
+|---|---|
+| [`app.py`](app.py) | the interactive app; it executes the method cell of the notebook instead of reimplementing it |
+| [`LatVeh_Interactive.ipynb`](LatVeh_Interactive.ipynb) | the same playground as a notebook, with the method in one collapsed cell |
+| [`LatVeh_Benchmark.ipynb`](LatVeh_Benchmark.ipynb) | the paper's case study; produces `fig_lane_change_comparison_alt.png` |
 
-**Binder** runs the notebook itself — no install, no account. Click the badge, wait for the
-session to start (a few minutes the first time after a change, then under a minute), run all
-cells, and the controls appear under the collapsed method cell.
+![Lane change: HT-MPC vs RT-MPC](fig_lane_change_comparison_alt.png)
 
-<!-- After deploying on share.streamlit.io, put the app URL here:
-[![Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://YOUR-APP.streamlit.app)
--->
+With the default (paper) bounds the app and the notebook reproduce that figure's run exactly:
+closed-loop cost 1481.0 for HT-MPC against 2238.1 for RT-MPC, a 33.8 % reduction.
 
-**`app.py`** is the same playground as a web app, with the controls in a sidebar and no code
-in sight. Run it locally with `streamlit run app.py`, or deploy it for free on
-[Streamlit Community Cloud](https://share.streamlit.io) (*New app* → this repository → main
-file `app.py`). It does not reimplement anything: at start-up it executes the method cell of
-`LatVeh_Interactive.ipynb`, so the app, the notebook and the paper's benchmark cannot drift
-apart.
-
-## Try it locally
+## Running it yourself
 
 ```bash
 pip install -r requirements.txt
-jupyter lab LatVeh_Interactive.ipynb     # the notebook, with the controls
-streamlit run app.py                     # or the same thing as a web app
+streamlit run app.py                     # the app
+jupyter lab LatVeh_Interactive.ipynb     # or the notebook
 ```
 
-In the notebook, run all cells: the controls appear right under the (collapsed) method cell,
-at the top. Choose the manoeuvre (single lane change, slalom, or your own piecewise-constant
-reference), the simulation length, the speed and the two uncertainty bounds; press **Run**
-(~1 s) and the animation plays by itself.
-
-![The interactive figure](fig_playground_preview.png)
-
-*The figure the playground produces (here with the optional $\alpha_k$ and $\delta_s$ panels):
-the two trajectories with the cross-sections each scheme uses to tighten the current step.
-HT-MPC steers up to 0.166 rad, RT-MPC is confined to the rigid margin of 0.039 rad (dotted).*
-
-Larger bounds mean a larger $\Omega$, more tightening and less steering left to the nominal
-input. The rigid scheme runs out of steering first: around $\overline{\Delta v} = 0.35$ m/s,
-at 45 km/h, or above 85 km/h, **RT-MPC's QP becomes infeasible while HT-MPC still completes
-the lane change**; a little further and no design exists at all.
-
-Python ≥ 3.10. All problems are modelled in [CVXPY](https://www.cvxpy.org) and solved with
-open-source solvers (Clarabel, with OSQP as fallback, and SCS for the offline SDP); no MOSEK
-or Gurobi licence is required.
-
-## Reproducing the paper figure
-
-Run `LatVeh_Benchmark.ipynb` top to bottom. All random draws are seeded, so the figure is
-regenerated exactly (up to solver tolerances).
+Python ≥ 3.10. Everything is modelled in [CVXPY](https://www.cvxpy.org) and solved with
+open-source solvers — Clarabel, OSQP as fallback, SCS for the offline SDP. No commercial
+licence is required.
 
 ## License
 
-MIT — see `LICENSE`.
+MIT — see [`LICENSE`](LICENSE).
