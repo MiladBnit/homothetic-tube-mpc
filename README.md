@@ -38,7 +38,7 @@ If the player does not appear, open [`Carla_recording.mp4`](Carla_recording.mp4)
 |---|---|
 | [`app.py`](app.py) | the interactive app; it executes the method cell of the notebook instead of reimplementing it |
 | [`LatVeh_Interactive.ipynb`](LatVeh_Interactive.ipynb) | the same playground as a notebook, with the method in one collapsed cell |
-| [`LatVeh_Benchmark.ipynb`](LatVeh_Benchmark.ipynb) | the paper's case study; produces `fig_lane_change_comparison_alt.png` |
+| [`LatVeh_Benchmark.ipynb`](LatVeh_Benchmark.ipynb) | the paper's case study; also compares the proposed closed-form scaling against the baseline homothetic scheme of Raković et al. (2012), whose scalings are decision variables (`fig_lane_change_three_schemes.png`) |
 
 ![Lane change: HT-MPC vs RT-MPC](fig_lane_change_comparison_alt.png)
 
