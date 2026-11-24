@@ -35,22 +35,24 @@ M = load_method()
 
 
 @st.cache_resource(show_spinner="Offline design: RPI ellipsoid, tightening, terminal set ...")
-def get_design(v_kmh, dv_max, w_ey):
-    return M["design"](v_kmh=v_kmh, dv_max=dv_max, w_ey=w_ey)
+def get_design(v_kmh, dvx_max_kmh, w_ey):
+    return M["design"](v_kmh=v_kmh, dvx_max_kmh=dvx_max_kmh, w_ey=w_ey)
 
 
 # cache_resource, not cache_data: the results are dataclasses defined in the
 # notebook's namespace, which pickle cannot serialise
 @st.cache_resource(show_spinner=False, max_entries=64)
-def run_case(v_kmh, dv_max, w_ey, mode, T_sim, custom):
-    return M["run"](get_design(v_kmh, dv_max, w_ey), mode, T_sim=T_sim, custom=custom)
+def run_case(v_kmh, dvx_max_kmh, w_ey, mode, T_sim, custom):
+    return M["run"](get_design(v_kmh, dvx_max_kmh, w_ey), mode, T_sim=T_sim, custom=custom)
 
 
-DV_PAPER = float(M["DV_MAX_DEFAULT"])
+R2D = float(M["R2D"])
+V_PAPER = int(M["V_KMH_DEFAULT"])
+DV_PAPER = float(M["DVX_KMH_DEFAULT"])
 W_PAPER = float(M["W_MAX_DEFAULT"][0])
-DV_LEVELS = sorted({0.05, 0.10, 0.15, 0.20, DV_PAPER, 0.30, 0.35, 0.40, 0.45})
-W_LEVELS = sorted({0.005, 0.010, 0.020, 0.030, 0.040, W_PAPER, 0.060, 0.065})
-_fmt = lambda v, ref: f"{v:.3f} (paper)" if abs(v - ref) < 1e-9 else f"{v:.3f}"
+DV_LEVELS = sorted({0.25, 0.50, 0.75, DV_PAPER, 1.25, 1.50, 1.75})
+W_LEVELS = sorted({0.005, 0.010, 0.020, 0.030, 0.040, W_PAPER, 0.060, 0.065, 0.070})
+_fmt = lambda v, ref, f=".3f": f"{v:{f}} (paper)" if abs(v - ref) < 1e-9 else f"{v:{f}}"
 
 # ── Sidebar: the controls ────────────────────────────────────────────────────
 with st.sidebar:
@@ -79,17 +81,20 @@ with st.sidebar:
 
     st.divider()
     st.caption("**Uncertainty bounds** (Assumption 1 of the paper)")
-    v_kmh = st.slider("speed v_x0 [km/h]", 40, 95, 60, 5)
-    dv_max = st.select_slider("Δv_x bound [m/s]", DV_LEVELS, DV_PAPER,
-                              format_func=lambda v: _fmt(v, DV_PAPER))
+    v_kmh = st.slider("speed v_x0 [km/h]", 40, 95, V_PAPER, 5)
+    dvx_max_kmh = st.select_slider("Δv_x bound [km/h]", DV_LEVELS, DV_PAPER,
+                                   format_func=lambda v: _fmt(v, DV_PAPER, ".2f"),
+                                   help="the simulated vehicle drives at the worst case "
+                                        "v_x0 + bound, as in the paper")
     w_ey = st.select_slider("w bound on e_y [m]", W_LEVELS, W_PAPER,
                             format_func=lambda v: _fmt(v, W_PAPER))
     st.divider()
-    panels = st.checkbox("also animate α_k and δ_s", False)
     dark = st.checkbox("dark background", False)
 
 # ── Header ───────────────────────────────────────────────────────────────────
-st.title("Homothetic tube MPC with closed-form scaling — lane change")
+st.title("Homothetic Tube MPC at the Computational Cost of Rigid Tube MPC")
+st.caption("Interactive lane-change playground for the paper by M. Banitalebi Dehkordi, "
+           "M. Mejari and D. Piga")
 st.markdown(
     "HT-MPC (proposed) and RT-MPC (rigid tube) solve the **same QP**, with the same RPI "
     "ellipsoid $\\Omega$, the same terminal cost and the same terminal set. The only "
@@ -100,7 +105,7 @@ st.markdown(
 
 # ── Design + run ─────────────────────────────────────────────────────────────
 try:
-    d = get_design(v_kmh, dv_max, w_ey)
+    d = get_design(v_kmh, dvx_max_kmh, w_ey)
 except ValueError as e:
     st.error(f"**No design exists for these bounds.** {e}")
     st.info("Assumption 3 fails: Ω no longer fits inside the constraints. "
@@ -108,7 +113,7 @@ except ValueError as e:
     st.stop()
 
 try:
-    res_p, res_r, y_ref, dvx = run_case(v_kmh, dv_max, w_ey, mode, T_sim, custom)
+    res_p, res_r, y_ref, dvx_kmh = run_case(v_kmh, dvx_max_kmh, w_ey, mode, T_sim, custom)
 except ValueError as e:
     st.error(f"Invalid manoeuvre: {e}")
     st.stop()
@@ -121,10 +126,12 @@ cols[1].metric("RT-MPC", sr["status"], f"cost {sr['cost']:.0f}", delta_color="of
 cols[2].metric("cost reduction",
                f"{100*(1-sp['cost']/sr['cost']):.1f} %" if (sp["ok"] and sr["ok"]) else "—",
                help="closed-loop cost of HT-MPC against RT-MPC on the same realisation")
-cols[3].metric("max |δ| HT / RT [rad]", f"{sp['max_delta']:.3f} / {sr['max_delta']:.3f}",
-               f"rigid margin {d.u_margin:.3f}", delta_color="off")
+cols[3].metric("max |v₀|ₖ| HT / RT [deg]", f"{sp['max_v0_deg']:.2f} / {sr['max_v0_deg']:.2f}",
+               f"rigid bound {d.u_margin*R2D:.2f}°", delta_color="off",
+               help="largest nominal steering each scheme used; RT-MPC may never exceed "
+                    "the rigid bound")
 cols[4].metric("Ω half-width in e_y [m]", f"{d.s_ey:.3f}",
-               f"Δv_x drawn {dvx:+.3f} m/s", delta_color="off")
+               f"plant Δv_x {dvx_kmh:+.2f} km/h", delta_color="off")
 
 if sp["ok"] and not sr["ok"]:
     st.success("**RT-MPC's QP is infeasible here, HT-MPC still completes the manoeuvre.** "
@@ -136,24 +143,27 @@ elif not sp["ok"]:
 
 fig = M["animate"](d, res_p, res_r, y_ref,
                    title=f"{mode} @ {v_kmh} km/h",
-                   frame_ms=int(round(1000*d.Ts)), panels=panels,
+                   frame_ms=int(round(1000*d.Ts)),
                    theme=("dark" if dark else "light"))
 st.plotly_chart(fig, theme=None, config={"displaylogo": False})
 
 with st.expander("What am I looking at?"):
     st.markdown(
         """
-* The figure is the paper's lane-change figure, drawn progressively: the two trajectories
-  $e_y(x)$ with the cross-sections each scheme uses to tighten the **current** step —
-  $\\alpha_k\\Omega$ for HT-MPC (thin, because the true error stays small) and the full
-  $\\Omega$ for RT-MPC.
+* The figure is the paper's lane-change figure, drawn progressively. **Top:** the lateral
+  position $e_y$ of both schemes. **Middle:** the nominal steering $v_{0|k}$ and the set
+  each scheme admits for it at the **current** step — $H_u v\\le h_u-\\alpha_k s_u$ for
+  HT-MPC (wide, because the true error stays small) and $H_u v\\le h_u-s_u$ for RT-MPC — inside
+  the physical steering limit. **Bottom:** the scale $\\alpha_k$ (RT-MPC always uses 1).
 * **The bounds** (Assumption 1) are the speed error $|\\Delta v_x|\\le\\overline{\\Delta v}$ and
   the additive disturbance $w_k\\in\\mathrm{Ell}(\\Gamma_w)$, set here by its $e_y$ semi-axis.
-  Larger bounds give a larger $\\Omega$, more tightening and less steering left to the nominal
-  input: at $\\overline{\\Delta v}=0.35$ m/s, at 45 km/h, above 85 km/h or at
-  $\\bar w_{e_y}=0.060$ m, RT-MPC becomes infeasible while HT-MPC still drives the manoeuvre.
+  As in the paper, the simulated vehicle drives at the worst case $v_{x0}+\\overline{\\Delta v}$.
+* Larger bounds give a larger $\\Omega$, more tightening and less steering left to the
+  nominal input. In the single lane change at $\\overline{\\Delta v}=1.25$ km/h, at 45 or
+  80 km/h, or at $\\bar w_{e_y}=0.060$ m — and in the slalom already at the paper's bounds —
+  RT-MPC becomes infeasible while HT-MPC still drives the manoeuvre.
 * With the default (paper) bounds this reproduces the benchmark exactly: closed-loop cost
-  1481.0 against 2238.1, a 33.8 % reduction.
+  1494.3 against 2347.9, a 36.4 % reduction.
 * Everything runs on open-source solvers (Clarabel, OSQP, SCS through CVXPY).
         """
     )

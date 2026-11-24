@@ -1,6 +1,6 @@
-# Homothetic Tube MPC with Closed-Form Scaling
+# Homothetic Tube MPC at the Computational Cost of Rigid Tube MPC
 
-**Homothetic Tube MPC with Closed-Form Scaling for Uncertain Linear Systems**
+**Homothetic Tube MPC at the Computational Cost of Rigid Tube MPC**
 Milad Banitalebi Dehkordi, Manas Mejari and Dario Piga — *submitted*
 
 ## ▶ [Open the interactive app](https://homothetic-tube-mpc-m2tzxs7zpx8minf6q2znzt.streamlit.app/)
@@ -14,12 +14,14 @@ paper's figure being drawn for both controllers. Nothing to install.
 ellipsoid $\Omega$, the same terminal cost and the same terminal set. The only difference is
 the constraint tightening: HT-MPC scales it by the measured $\alpha_k = \|e_k\|_{P^{\star-1}}$
 through the closed-form sequence $\alpha_{j|k}$, RT-MPC always uses $\alpha_{j|k} \equiv 1$.
-The uncertainty is given by bounds: a speed error $|\Delta v_x| \le \overline{\Delta v}$ and an
-additive disturbance $w_k$ in an ellipsoid.
+The uncertainty is given by bounds: a speed error $|\Delta v_x| \le \overline{\Delta v}$
+(1 km/h around 60 km/h in the paper; the simulated vehicle drives at the worst case
+$v_{x0} + \overline{\Delta v}$) and an additive disturbance $w_k$ in an ellipsoid.
 
-Tighten the bounds and the rigid scheme runs out of steering first — at
-$\overline{\Delta v} = 0.35$ m/s, at 45 km/h or above 85 km/h, **RT-MPC's QP becomes
-infeasible while HT-MPC still completes the lane change**.
+Tighten the bounds and the rigid scheme runs out of steering first. In the slalom this happens
+already at the paper's bounds, and in the single lane change at
+$\overline{\Delta v} = 1.25$ km/h or at 45 or 80 km/h: **RT-MPC's QP becomes infeasible while
+HT-MPC still completes the manoeuvre**.
 
 ## The controller in CARLA
 
@@ -38,12 +40,20 @@ If the player does not appear, open [`Carla_recording.mp4`](Carla_recording.mp4)
 |---|---|
 | [`app.py`](app.py) | the interactive app; it executes the method cell of the notebook instead of reimplementing it |
 | [`LatVeh_Interactive.ipynb`](LatVeh_Interactive.ipynb) | the same playground as a notebook, with the method in one collapsed cell |
-| [`LatVeh_Benchmark.ipynb`](LatVeh_Benchmark.ipynb) | the paper's case study; also compares the proposed closed-form scaling against the baseline homothetic scheme of Raković et al. (2012), whose scalings are decision variables |
+| [`LatVeh_Benchmark.ipynb`](LatVeh_Benchmark.ipynb) | the paper's case study and figure; also compares the proposed closed-form scaling against the baseline homothetic scheme of Raković et al. (2012), whose scalings are decision variables |
 
-![Lane change: HT-MPC vs RT-MPC](fig_lane_change_comparison_alt.png)
+![Lane change: HT-MPC vs RT-MPC](fig_lane_change_v2.png)
 
-With the default (paper) bounds the app and the notebook reproduce that figure's run exactly:
-closed-loop cost 1481.0 for HT-MPC against 2238.1 for RT-MPC, a 33.8 % reduction.
+Top: lateral position. Middle: nominal steering $v_{0|k}$ with the set each scheme admits for
+it at the current step ($H_u v \le h_u - \alpha_k s_u$ for HT-MPC, $H_u v \le h_u - s_u$ for
+RT-MPC) and the physical limit. Bottom: the scale $\alpha_k$. With the default (paper) bounds
+the app and the notebook reproduce this run exactly: closed-loop cost 1494.3 for HT-MPC
+against 2347.9 for RT-MPC, a 36.4 % reduction.
+
+On the same run, the baseline homothetic scheme with optimised scalings gives the same closed
+loop as the closed-form scaling (relative cost difference below $10^{-7}$). The baseline,
+however, solves an SOCP with $N+1$ extra variables. The proposed scheme solves a QP of exactly
+the size of RT-MPC's. `LatVeh_Benchmark.ipynb` prints the solver times of all three.
 
 ## Running it yourself
 
