@@ -8,6 +8,7 @@ holds it (the verbatim copy of `LatVeh_Benchmark.ipynb` plus design/run/animate)
 is executed as-is at start-up, so the app, the notebook and the paper's benchmark
 can never drift apart.
 """
+import hashlib
 import json
 
 import pandas as pd
@@ -20,30 +21,43 @@ st.set_page_config(page_title="Homothetic Tube MPC - lane change", page_icon="�
                    layout="wide")
 
 
-@st.cache_resource(show_spinner="Loading the method from the notebook ...")
-def load_method():
-    """Execute the notebook's method cell and hand back its namespace."""
+def _method_source():
+    """The notebook's method cell (the code cell that defines `animate`)."""
     nb = json.load(open(NOTEBOOK, encoding="utf-8"))
-    src = next("".join(c["source"]) for c in nb["cells"]
-               if c["cell_type"] == "code" and "def animate(" in "".join(c["source"]))
+    return next("".join(c["source"]) for c in nb["cells"]
+                if c["cell_type"] == "code" and "def animate(" in "".join(c["source"]))
+
+
+# Every cache below is keyed by the hash of the method cell.  Streamlit Cloud
+# reloads app.py on a push without restarting the process, so a cache keyed by
+# the arguments alone would keep serving the code (and the designs) of the
+# previous version of the notebook.
+SRC = _method_source()
+KEY = hashlib.sha256(SRC.encode("utf-8")).hexdigest()[:16]
+
+
+@st.cache_resource(show_spinner="Loading the method from the notebook ...", max_entries=2)
+def load_method(key):
+    """Execute the notebook's method cell and hand back its namespace."""
     ns = {}
-    exec(compile(src, f"{NOTEBOOK}#method", "exec"), ns)
+    exec(compile(SRC, f"{NOTEBOOK}#method", "exec"), ns)
     return ns
 
 
-M = load_method()
+M = load_method(KEY)
 
 
 @st.cache_resource(show_spinner="Offline design: RPI ellipsoid, tightening, terminal set ...")
-def get_design(v_kmh, dvx_max_kmh, w_ey):
+def get_design(key, v_kmh, dvx_max_kmh, w_ey):
     return M["design"](v_kmh=v_kmh, dvx_max_kmh=dvx_max_kmh, w_ey=w_ey)
 
 
 # cache_resource, not cache_data: the results are dataclasses defined in the
 # notebook's namespace, which pickle cannot serialise
 @st.cache_resource(show_spinner=False, max_entries=64)
-def run_case(v_kmh, dvx_max_kmh, w_ey, mode, T_sim, custom):
-    return M["run"](get_design(v_kmh, dvx_max_kmh, w_ey), mode, T_sim=T_sim, custom=custom)
+def run_case(key, v_kmh, dvx_max_kmh, w_ey, mode, T_sim, custom):
+    return M["run"](get_design(key, v_kmh, dvx_max_kmh, w_ey), mode, T_sim=T_sim,
+                    custom=custom)
 
 
 R2D = float(M["R2D"])
@@ -105,7 +119,7 @@ st.markdown(
 
 # ── Design + run ─────────────────────────────────────────────────────────────
 try:
-    d = get_design(v_kmh, dvx_max_kmh, w_ey)
+    d = get_design(KEY, v_kmh, dvx_max_kmh, w_ey)
 except ValueError as e:
     st.error(f"**No design exists for these bounds.** {e}")
     st.info("Assumption 3 fails: Ω no longer fits inside the constraints. "
@@ -113,7 +127,7 @@ except ValueError as e:
     st.stop()
 
 try:
-    res_p, res_r, y_ref, dvx_kmh = run_case(v_kmh, dvx_max_kmh, w_ey, mode, T_sim, custom)
+    res_p, res_r, y_ref, dvx_kmh = run_case(KEY, v_kmh, dvx_max_kmh, w_ey, mode, T_sim, custom)
 except ValueError as e:
     st.error(f"Invalid manoeuvre: {e}")
     st.stop()
