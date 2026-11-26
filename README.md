@@ -8,7 +8,10 @@ Milad Banitalebi Dehkordi, Manas Mejari and Dario Piga — *submitted*
 Pick a lane-change manoeuvre, set the speed and the two uncertainty bounds, and watch the
 paper's figure being drawn for both controllers. Nothing to install.
 
-[![The interactive app](fig_playground_preview.png)](https://homothetic-tube-mpc-m2tzxs7zpx8minf6q2znzt.streamlit.app/)
+[![The interactive app: slalom at the paper's bounds](fig_playground_preview.png)](https://homothetic-tube-mpc-m2tzxs7zpx8minf6q2znzt.streamlit.app/)
+
+*The slalom at the paper's bounds: RT-MPC's QP becomes infeasible at the second lane change
+($k = 25$), HT-MPC completes the manoeuvre.*
 
 **HT-MPC** (proposed) and **RT-MPC** (rigid tube) solve the *same* QP, with the same RPI
 ellipsoid $\Omega$, the same terminal cost and the same terminal set. The only difference is
